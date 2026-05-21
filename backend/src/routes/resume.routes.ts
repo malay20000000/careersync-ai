@@ -39,7 +39,7 @@ router.post('/analyze', authMiddleware, upload.single('resume'), async (req: any
 
   } catch (error: any) {
     console.error('Error analyzing resume:', error);
-    res.status(500).json({ message: 'Failed to analyze resume' });
+    res.status(500).json({ message: `Failed to analyze resume: ${error?.message || 'Unknown error'}` });
   }
 });
 
@@ -58,7 +58,7 @@ router.post('/authenticity', authMiddleware, upload.single('resume'), async (req
 
   } catch (error: any) {
     console.error('Error checking authenticity:', error);
-    res.status(500).json({ message: 'Failed to check resume authenticity' });
+    res.status(500).json({ message: `Failed to check resume authenticity: ${error?.message || 'Unknown error'}` });
   }
 });
 
@@ -83,7 +83,7 @@ router.post('/analyze-jd', authMiddleware, upload.single('resume'), async (req: 
 
   } catch (error: any) {
     console.error('Error analyzing resume against JD:', error);
-    res.status(500).json({ message: 'Failed to analyze matching' });
+    res.status(500).json({ message: `Failed to analyze matching: ${error?.message || 'Unknown error'}` });
   }
 });
 
