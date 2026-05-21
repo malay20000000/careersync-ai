@@ -21,16 +21,17 @@ export const analyzeResume = async (resumeText: string): Promise<any> => {
   try {
     if (!openai) throw new Error('OpenAI client not initialized');
     const response = await openai.chat.completions.create({
-      model: "openai/gpt-oss-120b:free",
+      model: "google/gemini-2.0-pro-exp-02-05:free",
       messages: [{ role: "system", content: "You output only structured JSON." }, { role: "user", content: prompt }],
       temperature: 0.2
     });
     const content = response.choices[0]?.message?.content || '{}';
     const jsonMatch = content.match(/\{[\s\S]*\}/);
-    return jsonMatch ? JSON.parse(jsonMatch[0]) : {};
+    if (!jsonMatch) throw new Error('Invalid JSON response');
+    return JSON.parse(jsonMatch[0]);
   } catch (error: any) {
     console.error('AI Analysis Error:', error?.message || error);
-    return {};
+    throw new Error('AI Analysis failed');
   }
 };
 
@@ -44,16 +45,17 @@ export const compareResumeWithJD = async (resumeText: string, jdText: string): P
   try {
     if (!openai) throw new Error('OpenAI client not initialized');
     const response = await openai.chat.completions.create({
-      model: "openai/gpt-oss-120b:free",
+      model: "google/gemini-2.0-pro-exp-02-05:free",
       messages: [{ role: "system", content: "You output only structured JSON." }, { role: "user", content: prompt }],
       temperature: 0.2
     });
     const content = response.choices[0]?.message?.content || '{}';
     const jsonMatch = content.match(/\{[\s\S]*\}/);
-    return jsonMatch ? JSON.parse(jsonMatch[0]) : {};
+    if (!jsonMatch) throw new Error('Invalid JSON response');
+    return JSON.parse(jsonMatch[0]);
   } catch (error: any) {
     console.error('JD Analysis Error:', error?.message || error);
-    return {};
+    throw new Error('JD Analysis failed');
   }
 };
 
@@ -253,7 +255,7 @@ ${jdText.substring(0, 3000)}
   try {
     if (!openai) throw new Error('OpenAI client not initialized');
     const response = await openai.chat.completions.create({
-      model: "openai/gpt-oss-120b:free",
+      model: "google/gemini-2.0-pro-exp-02-05:free",
       messages: [
         { role: "system", content: "You output only valid JSON. No markdown fences, no explanation." },
         { role: "user", content: prompt }
@@ -343,7 +345,7 @@ Instructions:
     ];
 
     const response = await openai.chat.completions.create({
-      model: "openai/gpt-oss-120b:free",
+      model: "google/gemini-2.0-pro-exp-02-05:free",
       messages: messages,
       temperature: 0.5,
       max_tokens: 500
@@ -372,16 +374,17 @@ export const checkAuthenticity = async (resumeText: string): Promise<any> => {
   try {
     if (!openai) throw new Error('OpenAI client not initialized');
     const response = await openai.chat.completions.create({
-      model: "openai/gpt-oss-120b:free",
+      model: "google/gemini-2.0-pro-exp-02-05:free",
       messages: [{ role: "system", content: "You output only structured JSON." }, { role: "user", content: prompt }],
       temperature: 0.1
     });
     const content = response.choices[0]?.message?.content || '{}';
     const jsonMatch = content.match(/\{[\s\S]*\}/);
-    return jsonMatch ? JSON.parse(jsonMatch[0]) : {};
+    if (!jsonMatch) throw new Error('Invalid JSON response');
+    return JSON.parse(jsonMatch[0]);
   } catch (error: any) {
     console.error('Authenticity Check Error:', error?.message || error);
-    return { trust_score: 0, red_flags: [{ claim: 'Error', reason: 'Failed to analyze authenticity.' }], green_flags: [], authenticity_summary: 'Error occurred.' };
+    throw new Error('Authenticity check failed');
   }
 };
 
@@ -398,7 +401,7 @@ Keep your responses concise, encouraging, and highly actionable. Format your ans
     ];
 
     const response = await openai.chat.completions.create({
-      model: "openai/gpt-oss-120b:free",
+      model: "google/gemini-2.0-pro-exp-02-05:free",
       messages: messages,
       temperature: 0.7,
       max_tokens: 600
