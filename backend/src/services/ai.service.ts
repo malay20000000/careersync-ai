@@ -31,7 +31,7 @@ export const analyzeResume = async (resumeText: string): Promise<any> => {
     return JSON.parse(jsonMatch[0]);
   } catch (error: any) {
     console.error('AI Analysis Error:', error?.message || error);
-    throw new Error('AI Analysis failed');
+    throw new Error('AI Analysis failed: ' + (error?.message || 'Unknown error'));
   }
 };
 
@@ -55,7 +55,7 @@ export const compareResumeWithJD = async (resumeText: string, jdText: string): P
     return JSON.parse(jsonMatch[0]);
   } catch (error: any) {
     console.error('JD Analysis Error:', error?.message || error);
-    throw new Error('JD Analysis failed');
+    throw new Error('JD Analysis failed: ' + (error?.message || 'Unknown error'));
   }
 };
 
@@ -384,7 +384,7 @@ export const checkAuthenticity = async (resumeText: string): Promise<any> => {
     return JSON.parse(jsonMatch[0]);
   } catch (error: any) {
     console.error('Authenticity Check Error:', error?.message || error);
-    throw new Error('Authenticity check failed');
+    throw new Error('Authenticity check failed: ' + (error?.message || 'Unknown error'));
   }
 };
 
