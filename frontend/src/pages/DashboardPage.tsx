@@ -520,7 +520,7 @@ const DashboardPage = () => {
                     <Target size={24} className="text-sky-500" /> Key Strengths
                   </h3>
                   <div className="grid sm:grid-cols-2 gap-4">
-                    {result.strengths.map((s, i) => (
+                    {result.strengths?.map((s, i) => (
                       <div key={i} className="flex items-start gap-3 text-slate-700 font-medium bg-slate-50 p-4 rounded-xl border border-slate-100">
                         <CheckCircle2 size={20} className="text-emerald-500 shrink-0 mt-0.5" /> {s}
                       </div>
@@ -533,12 +533,12 @@ const DashboardPage = () => {
                     <Calendar className="text-sky-400" size={28} /> Personalized Career Roadmap
                   </h3>
                   <div className="grid gap-8">
-                    {Object.entries(result.roadmap).map(([period, tasks], idx) => (
+                    {Object.entries(result.roadmap || {}).map(([period, tasks], idx) => (
                       <div key={idx} className="group relative pl-8 border-l-2 border-slate-700 hover:border-sky-500 transition duration-500">
                         <div className="absolute -left-[9px] top-0 w-4 h-4 bg-slate-900 border-2 border-slate-700 group-hover:border-sky-500 rounded-full transition duration-500"></div>
                         <h4 className="text-sky-400 font-black uppercase tracking-widest text-sm mb-4">{period}</h4>
                         <div className="grid sm:grid-cols-2 gap-4">
-                          {tasks.map((task, i) => (
+                          {Array.isArray(tasks) && tasks.map((task, i) => (
                             <div key={i} className="bg-slate-800 border border-slate-700 p-5 rounded-2xl text-sm text-slate-300 flex items-start gap-3 hover:border-sky-500/50 hover:bg-slate-800/80 transition">
                               <ChevronRight className="text-sky-500 mt-0.5 shrink-0" size={18} />
                               {task}
@@ -580,7 +580,7 @@ const DashboardPage = () => {
                       <CheckCircle2 className="text-emerald-500" size={24} /> Matching Skills
                     </h4>
                     <div className="flex flex-wrap gap-2">
-                      {jdResult.matching_skills.map((s, i) => (
+                      {jdResult.matching_skills?.map((s, i) => (
                         <span key={i} className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-4 py-2 rounded-xl text-sm font-bold">
                           {s}
                         </span>
@@ -592,7 +592,7 @@ const DashboardPage = () => {
                       <AlertCircle className="text-red-500" size={24} /> Missing Keywords
                     </h4>
                     <div className="flex flex-wrap gap-2">
-                      {jdResult.missing_keywords.map((s, i) => (
+                      {jdResult.missing_keywords?.map((s, i) => (
                         <span key={i} className="bg-red-50 text-red-700 border border-red-200 px-4 py-2 rounded-xl text-sm font-bold">
                           {s}
                         </span>
