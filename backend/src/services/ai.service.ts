@@ -21,7 +21,7 @@ export const analyzeResume = async (resumeText: string): Promise<any> => {
   try {
     if (!openai) throw new Error('OpenAI client not initialized');
     const response = await openai.chat.completions.create({
-      model: "google/gemini-2.0-pro-exp-02-05:free",
+      model: "google/gemma-4-31b-it:free",
       messages: [{ role: "system", content: "You output only structured JSON." }, { role: "user", content: prompt }],
       temperature: 0.2
     });
@@ -45,7 +45,7 @@ export const compareResumeWithJD = async (resumeText: string, jdText: string): P
   try {
     if (!openai) throw new Error('OpenAI client not initialized');
     const response = await openai.chat.completions.create({
-      model: "google/gemini-2.0-pro-exp-02-05:free",
+      model: "google/gemma-4-31b-it:free",
       messages: [{ role: "system", content: "You output only structured JSON." }, { role: "user", content: prompt }],
       temperature: 0.2
     });
@@ -255,7 +255,7 @@ ${jdText.substring(0, 3000)}
   try {
     if (!openai) throw new Error('OpenAI client not initialized');
     const response = await openai.chat.completions.create({
-      model: "google/gemini-2.0-pro-exp-02-05:free",
+      model: "google/gemma-4-31b-it:free",
       messages: [
         { role: "system", content: "You output only valid JSON. No markdown fences, no explanation." },
         { role: "user", content: prompt }
@@ -345,7 +345,7 @@ Instructions:
     ];
 
     const response = await openai.chat.completions.create({
-      model: "google/gemini-2.0-pro-exp-02-05:free",
+      model: "google/gemma-4-31b-it:free",
       messages: messages,
       temperature: 0.5,
       max_tokens: 500
@@ -374,7 +374,7 @@ export const checkAuthenticity = async (resumeText: string): Promise<any> => {
   try {
     if (!openai) throw new Error('OpenAI client not initialized');
     const response = await openai.chat.completions.create({
-      model: "google/gemini-2.0-pro-exp-02-05:free",
+      model: "google/gemma-4-31b-it:free",
       messages: [{ role: "system", content: "You output only structured JSON." }, { role: "user", content: prompt }],
       temperature: 0.1
     });
@@ -401,7 +401,7 @@ Keep your responses concise, encouraging, and highly actionable. Format your ans
     ];
 
     const response = await openai.chat.completions.create({
-      model: "google/gemini-2.0-pro-exp-02-05:free",
+      model: "google/gemma-4-31b-it:free",
       messages: messages,
       temperature: 0.7,
       max_tokens: 600
