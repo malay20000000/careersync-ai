@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const genAI = process.env.GEMINI_API_KEY ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
-const MODEL_NAME = "gemini-2.0-flash";
+const MODEL_NAME = "gemini-1.5-flash";
 
 const getJsonModel = (temperature = 0.2) => {
   if (!genAI) throw new Error('GEMINI_API_KEY not configured in environment');
@@ -357,22 +357,26 @@ Instructions:
   try {
     if (!genAI) throw new Error('GEMINI_API_KEY not configured in environment');
     const geminiModel = genAI!.getGenerativeModel({
-      model: MODEL_NAME,
-      systemInstruction: systemPrompt,
+      model: "gemini-1.5-flash",
       generationConfig: {
         temperature: 0.5,
         maxOutputTokens: 500,
       }
     });
 
-    // Extract the latest message to send explicitly
     if (history.length === 0) return { reply: "Let's begin!" };
     
     const previousHistory = history.slice(0, -1);
     const lastMessage = history[history.length - 1]!.content;
 
+    const modifiedHistory: ChatMessage[] = [
+      { role: 'user', content: systemPrompt },
+      { role: 'assistant', content: 'Acknowledged. I will act as the interviewer.' },
+      ...previousHistory
+    ];
+
     const chatSession = geminiModel.startChat({
-      history: mapHistoryToGemini(previousHistory)
+      history: mapHistoryToGemini(modifiedHistory)
     });
 
     const result = await chatSession.sendMessage(lastMessage);
@@ -415,7 +419,6 @@ Keep your responses concise, encouraging, and highly actionable. Format your ans
     if (!genAI) throw new Error('GEMINI_API_KEY not configured in environment');
     const geminiModel = genAI!.getGenerativeModel({
       model: MODEL_NAME,
-      systemInstruction: systemPrompt,
       generationConfig: {
         temperature: 0.7,
         maxOutputTokens: 600,
@@ -427,8 +430,14 @@ Keep your responses concise, encouraging, and highly actionable. Format your ans
     const previousHistory = history.slice(0, -1);
     const lastMessage = history[history.length - 1]!.content;
 
+    const modifiedHistory: ChatMessage[] = [
+      { role: 'user', content: systemPrompt },
+      { role: 'assistant', content: 'Acknowledged. I am your AI Mentor.' },
+      ...previousHistory
+    ];
+
     const chatSession = geminiModel.startChat({
-      history: mapHistoryToGemini(previousHistory)
+      history: mapHistoryToGemini(modifiedHistory)
     });
 
     const result = await chatSession.sendMessage(lastMessage);
