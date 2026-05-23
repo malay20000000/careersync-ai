@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const genAI = process.env.GEMINI_API_KEY ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
-const MODEL_NAME = "gemini-2.5-flash";
+const MODEL_NAME = "gemini-1.5-flash";
 
 const getJsonModel = (temperature = 0.2) => {
   if (!genAI) throw new Error('GEMINI_API_KEY not configured in environment');
@@ -362,7 +362,7 @@ Instructions:
     return { reply };
   } catch (error: any) {
     console.error('Mock Interview Error:', error?.message || error);
-    return { reply: "There was an error connecting to the interviewer AI. Please try again." };
+    return { reply: "Error connecting to AI: " + (error?.message || "Unknown error") };
   }
 };
 
@@ -418,6 +418,6 @@ Keep your responses concise, encouraging, and highly actionable. Format your ans
     return { reply };
   } catch (error: any) {
     console.error('Mentor Chat Error:', error?.message || error);
-    return { reply: "There was an error connecting to your AI Mentor. Please try again." };
+    return { reply: "Error connecting to AI: " + (error?.message || "Unknown error") };
   }
 };
