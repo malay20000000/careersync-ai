@@ -313,10 +313,28 @@ export interface ChatMessage {
 }
 
 const mapHistoryToGemini = (history: ChatMessage[]) => {
-  return history.map(msg => ({
-    role: msg.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: msg.content }]
-  }));
+  const mapped: any[] = [];
+  
+  for (const msg of history) {
+    const role = msg.role === 'assistant' ? 'model' : 'user';
+    const lastRole = mapped.length > 0 ? mapped[mapped.length - 1].role : null;
+    
+    if (mapped.length === 0 && role === 'model') {
+      mapped.push({ role: 'user', parts: [{ text: 'Hello' }] });
+    }
+    
+    if (lastRole === role) {
+      mapped[mapped.length - 1].parts[0].text += '\n' + msg.content;
+    } else {
+      mapped.push({ role, parts: [{ text: msg.content }] });
+    }
+  }
+
+  if (mapped.length > 0 && mapped[mapped.length - 1].role === 'user') {
+    mapped.push({ role: 'model', parts: [{ text: 'Acknowledged.' }] });
+  }
+
+  return mapped;
 };
 
 export const conductMockInterview = async (resumeText: string, jdText: string, history: ChatMessage[]): Promise<any> => {
