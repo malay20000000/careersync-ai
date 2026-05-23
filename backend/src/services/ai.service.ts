@@ -1,31 +1,15 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import OpenAI from 'openai';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const genAI = process.env.GEMINI_API_KEY ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
-const MODEL_NAME = "gemini-2.0-flash";
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({
+  baseURL: 'https://openrouter.ai/api/v1',
+  apiKey: process.env.OPENAI_API_KEY,
+}) : null;
 
-const getJsonModel = (temperature = 0.2) => {
-  if (!genAI) throw new Error('GEMINI_API_KEY not configured in environment');
-  return genAI.getGenerativeModel({
-    model: MODEL_NAME,
-    generationConfig: {
-      responseMimeType: "application/json",
-      temperature
-    }
-  });
-};
-
-const getTextModel = (temperature = 0.5) => {
-  if (!genAI) throw new Error('GEMINI_API_KEY not configured in environment');
-  return genAI.getGenerativeModel({
-    model: MODEL_NAME,
-    generationConfig: {
-      temperature
-    }
-  });
-};
+// The exact model that successfully worked for JD and Authenticity
+const MODEL_NAME = "google/gemini-2.0-pro-exp-02-05:free";
 
 export const analyzeResume = async (resumeText: string): Promise<any> => {
   const prompt = `
@@ -34,10 +18,19 @@ export const analyzeResume = async (resumeText: string): Promise<any> => {
     Resume Text: ${resumeText.substring(0, 4000)}
   `;
   try {
-    const model = getJsonModel(0.2);
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-    return JSON.parse(text);
+    if (!openai) throw new Error('OPENAI_API_KEY not configured in environment');
+    const response = await openai.chat.completions.create({
+      model: MODEL_NAME,
+      messages: [
+        { role: "system", content: "You output only valid JSON. No markdown fences, no explanation." },
+        { role: "user", content: prompt }
+      ],
+      temperature: 0.2
+    });
+    const content = response.choices[0]?.message?.content || '{}';
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('Invalid JSON response');
+    return JSON.parse(jsonMatch[0]);
   } catch (error: any) {
     console.error('AI Analysis Error:', error?.message || error);
     throw new Error('AI Analysis failed: ' + (error?.message || 'Unknown error'));
@@ -52,10 +45,19 @@ export const compareResumeWithJD = async (resumeText: string, jdText: string): P
     JD: ${jdText.substring(0, 3000)}
   `;
   try {
-    const model = getJsonModel(0.2);
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-    return JSON.parse(text);
+    if (!openai) throw new Error('OPENAI_API_KEY not configured in environment');
+    const response = await openai.chat.completions.create({
+      model: MODEL_NAME,
+      messages: [
+        { role: "system", content: "You output only valid JSON. No markdown fences, no explanation." },
+        { role: "user", content: prompt }
+      ],
+      temperature: 0.2
+    });
+    const content = response.choices[0]?.message?.content || '{}';
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('Invalid JSON response');
+    return JSON.parse(jsonMatch[0]);
   } catch (error: any) {
     console.error('JD Analysis Error:', error?.message || error);
     throw new Error('JD Analysis failed: ' + (error?.message || 'Unknown error'));
@@ -256,11 +258,20 @@ ${jdText.substring(0, 3000)}
   `;
 
   try {
-    const model = getJsonModel(0.3);
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-    const structuredData = JSON.parse(text);
-    
+    if (!openai) throw new Error('OPENAI_API_KEY not configured in environment');
+    const response = await openai.chat.completions.create({
+      model: MODEL_NAME,
+      messages: [
+        { role: "system", content: "You output only valid JSON. No markdown fences, no explanation." },
+        { role: "user", content: prompt }
+      ],
+      temperature: 0.3
+    });
+    const content = response.choices[0]?.message?.content || '{}';
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('No JSON found');
+
+    const structuredData = JSON.parse(jsonMatch[0]);
     const latex = buildLatex(structuredData);
 
     // Build a markdown preview from the same data
@@ -312,31 +323,6 @@ export interface ChatMessage {
   content: string;
 }
 
-const mapHistoryToGemini = (history: ChatMessage[]) => {
-  const mapped: any[] = [];
-  
-  for (const msg of history) {
-    const role = msg.role === 'assistant' ? 'model' : 'user';
-    const lastRole = mapped.length > 0 ? mapped[mapped.length - 1].role : null;
-    
-    if (mapped.length === 0 && role === 'model') {
-      mapped.push({ role: 'user', parts: [{ text: 'Hello' }] });
-    }
-    
-    if (lastRole === role) {
-      mapped[mapped.length - 1].parts[0].text += '\n' + msg.content;
-    } else {
-      mapped.push({ role, parts: [{ text: msg.content }] });
-    }
-  }
-
-  if (mapped.length > 0 && mapped[mapped.length - 1].role === 'user') {
-    mapped.push({ role: 'model', parts: [{ text: 'Acknowledged.' }] });
-  }
-
-  return mapped;
-};
-
 export const conductMockInterview = async (resumeText: string, jdText: string, history: ChatMessage[]): Promise<any> => {
   const systemPrompt = `You are an expert technical interviewer and hiring manager conducting a mock interview with a candidate.
 You will base your questions primarily on the Job Description and the candidate's Resume.
@@ -355,28 +341,22 @@ Instructions:
 5. If the user indicates they are done or asks to finish, provide a brief summary of their performance.`;
 
   try {
-    if (!genAI) throw new Error('GEMINI_API_KEY not configured in environment');
-    const geminiModel = genAI!.getGenerativeModel({
-      model: MODEL_NAME,
-      systemInstruction: systemPrompt,
-      generationConfig: {
-        temperature: 0.5,
-        maxOutputTokens: 500,
-      }
-    });
-
-    // Extract the latest message to send explicitly
-    if (history.length === 0) return { reply: "Let's begin!" };
+    if (!openai) throw new Error('OPENAI_API_KEY not configured in environment');
     
-    const previousHistory = history.slice(0, -1);
-    const lastMessage = history[history.length - 1]!.content;
+    // Prepare messages array for the LLM
+    const messages: any[] = [
+      { role: "system", content: systemPrompt },
+      ...history
+    ];
 
-    const chatSession = geminiModel.startChat({
-      history: mapHistoryToGemini(previousHistory)
+    const response = await openai.chat.completions.create({
+      model: MODEL_NAME,
+      messages: messages,
+      temperature: 0.5,
+      max_tokens: 500
     });
 
-    const result = await chatSession.sendMessage(lastMessage);
-    const reply = result.response.text();
+    const reply = response.choices[0]?.message?.content || 'I am having trouble responding right now. Let us try again.';
     return { reply };
   } catch (error: any) {
     console.error('Mock Interview Error:', error?.message || error);
@@ -393,14 +373,20 @@ export const checkAuthenticity = async (resumeText: string): Promise<any> => {
     - Completing a 4-year degree in 1 year.
     - Listing a massive number of deep technical skills that no single person typically masters.
 
-    Structure: { "trust_score": 0-100, "red_flags": [{ "claim": "string", "reason": "string" }], "green_flags": ["string"], "authenticity_summary": "string" }
+    Structure: { "trust_score": 0-100, "red_flags": [{ "claim": "", "reason": "" }], "green_flags": [], "authenticity_summary": "" }
     Resume: ${resumeText.substring(0, 4000)}
   `;
   try {
-    const model = getJsonModel(0.1);
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-    return JSON.parse(text);
+    if (!openai) throw new Error('OPENAI_API_KEY not configured in environment');
+    const response = await openai.chat.completions.create({
+      model: MODEL_NAME,
+      messages: [{ role: "system", content: "You output only structured JSON." }, { role: "user", content: prompt }],
+      temperature: 0.1
+    });
+    const content = response.choices[0]?.message?.content || '{}';
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('Invalid JSON response');
+    return JSON.parse(jsonMatch[0]);
   } catch (error: any) {
     console.error('Authenticity Check Error:', error?.message || error);
     throw new Error('Authenticity check failed: ' + (error?.message || 'Unknown error'));
@@ -412,27 +398,21 @@ export const chatWithMentor = async (history: ChatMessage[]): Promise<any> => {
 Keep your responses concise, encouraging, and highly actionable. Format your answers using markdown if necessary, but keep them brief.`;
 
   try {
-    if (!genAI) throw new Error('GEMINI_API_KEY not configured in environment');
-    const geminiModel = genAI!.getGenerativeModel({
-      model: MODEL_NAME,
-      systemInstruction: systemPrompt,
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 600,
-      }
-    });
-
-    if (history.length === 0) return { reply: "Hello!" };
+    if (!openai) throw new Error('OPENAI_API_KEY not configured in environment');
     
-    const previousHistory = history.slice(0, -1);
-    const lastMessage = history[history.length - 1]!.content;
+    const messages: any[] = [
+      { role: "system", content: systemPrompt },
+      ...history
+    ];
 
-    const chatSession = geminiModel.startChat({
-      history: mapHistoryToGemini(previousHistory)
+    const response = await openai.chat.completions.create({
+      model: MODEL_NAME,
+      messages: messages,
+      temperature: 0.7,
+      max_tokens: 600
     });
 
-    const result = await chatSession.sendMessage(lastMessage);
-    const reply = result.response.text();
+    const reply = response.choices[0]?.message?.content || 'I am having trouble responding right now. Let us try again.';
     return { reply };
   } catch (error: any) {
     console.error('Mentor Chat Error:', error?.message || error);
