@@ -1,34 +1,43 @@
-import OpenAI from 'openai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const openai = process.env.OPENAI_API_KEY ? new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-  baseURL: 'https://openrouter.ai/api/v1', 
-  defaultHeaders: {
-    "HTTP-Referer": "http://localhost:5173", 
-    "X-Title": "CareerSync AI",
-  }
-}) : null;
+const genAI = process.env.GEMINI_API_KEY ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
+const MODEL_NAME = "gemini-2.5-flash";
+
+const getJsonModel = (temperature = 0.2) => {
+  if (!genAI) throw new Error('GEMINI_API_KEY not configured in environment');
+  return genAI.getGenerativeModel({
+    model: MODEL_NAME,
+    generationConfig: {
+      responseMimeType: "application/json",
+      temperature
+    }
+  });
+};
+
+const getTextModel = (temperature = 0.5) => {
+  if (!genAI) throw new Error('GEMINI_API_KEY not configured in environment');
+  return genAI.getGenerativeModel({
+    model: MODEL_NAME,
+    generationConfig: {
+      temperature
+    }
+  });
+};
 
 export const analyzeResume = async (resumeText: string): Promise<any> => {
   const prompt = `
     Analyze the following resume text and provide a detailed JSON response.
-    Structure: { "score": 0-100, "ats_compatibility": 0-100, "strengths": [], "weaknesses": [], "skill_gaps": [], "suggestions": [], "roadmap": { "0-3 months": [], "3-6 months": [], "6-12 months": [] } }
+    Structure: { "score": 0-100, "ats_compatibility": 0-100, "strengths": ["string"], "weaknesses": ["string"], "skill_gaps": ["string"], "suggestions": ["string"], "roadmap": { "0-3 months": ["string"], "3-6 months": ["string"], "6-12 months": ["string"] } }
     Resume Text: ${resumeText.substring(0, 4000)}
   `;
   try {
-    if (!openai) throw new Error('OpenAI client not initialized');
-    const response = await openai.chat.completions.create({
-      model: "google/gemini-3-flash-preview:free",
-      messages: [{ role: "system", content: "You output only structured JSON." }, { role: "user", content: prompt }],
-      temperature: 0.2
-    });
-    const content = response.choices[0]?.message?.content || '{}';
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('Invalid JSON response');
-    return JSON.parse(jsonMatch[0]);
+    const model = getJsonModel(0.2);
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+    return JSON.parse(text);
   } catch (error: any) {
     console.error('AI Analysis Error:', error?.message || error);
     throw new Error('AI Analysis failed: ' + (error?.message || 'Unknown error'));
@@ -38,21 +47,15 @@ export const analyzeResume = async (resumeText: string): Promise<any> => {
 export const compareResumeWithJD = async (resumeText: string, jdText: string): Promise<any> => {
   const prompt = `
     Compare the following Resume against the Job Description (JD).
-    Structure: { "match_percentage": 0-100, "missing_keywords": [], "matching_skills": [], "recommendations": [], "suitability_summary": "" }
+    Structure: { "match_percentage": 0-100, "missing_keywords": ["string"], "matching_skills": ["string"], "recommendations": ["string"], "suitability_summary": "string" }
     Resume: ${resumeText.substring(0, 3000)}
     JD: ${jdText.substring(0, 3000)}
   `;
   try {
-    if (!openai) throw new Error('OpenAI client not initialized');
-    const response = await openai.chat.completions.create({
-      model: "google/gemini-3-flash-preview:free",
-      messages: [{ role: "system", content: "You output only structured JSON." }, { role: "user", content: prompt }],
-      temperature: 0.2
-    });
-    const content = response.choices[0]?.message?.content || '{}';
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('Invalid JSON response');
-    return JSON.parse(jsonMatch[0]);
+    const model = getJsonModel(0.2);
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+    return JSON.parse(text);
   } catch (error: any) {
     console.error('JD Analysis Error:', error?.message || error);
     throw new Error('JD Analysis failed: ' + (error?.message || 'Unknown error'));
@@ -73,55 +76,55 @@ function buildLatex(data: any): string {
   const github = data.github || '';
   const location = esc(data.location || '');
 
-  let header = `\\begin{center}\n    \\textbf{\\Huge \\scshape ${name}} \\\\ \\vspace{1pt}\n    \\small`;
+  let header = \`\\begin{center}\\n    \\textbf{\\Huge \\scshape \${name}} \\\\ \\vspace{1pt}\\n    \\small\`;
   const contactParts: string[] = [];
   if (phone) contactParts.push(phone);
-  if (email) contactParts.push(`\\href{mailto:${email}}{\\underline{${esc(email)}}}`);
+  if (email) contactParts.push(\`\\href{mailto:\${email}}{\\underline{\${esc(email)}}}\`);
   if (location) contactParts.push(location);
-  if (linkedin) contactParts.push(`\\href{${linkedin}}{\\underline{linkedin.com/in/${esc(data.linkedin_user || 'user')}}}`);
-  if (github) contactParts.push(`\\href{${github}}{\\underline{github.com/${esc(data.github_user || 'user')}}}`);
+  if (linkedin) contactParts.push(\`\\href{\${linkedin}}{\\underline{linkedin.com/in/\${esc(data.linkedin_user || 'user')}}}\`);
+  if (github) contactParts.push(\`\\href{\${github}}{\\underline{github.com/\${esc(data.github_user || 'user')}}}\`);
   header += ' ' + contactParts.join(' $|$ ');
-  header += '\n\\end{center}';
+  header += '\\n\\end{center}';
 
   // Education
-  let education = '\\section{Education}\n  \\resumeSubHeadingListStart\n';
+  let education = '\\section{Education}\\n  \\resumeSubHeadingListStart\\n';
   for (const edu of (data.education || [])) {
-    education += `    \\resumeSubheading\n      {${esc(edu.school)}}{${esc(edu.location)}}\n      {${esc(edu.degree)}}{${esc(edu.date)}}\n`;
+    education += \`    \\resumeSubheading\\n      {\${esc(edu.school)}}{\${esc(edu.location)}}\\n      {\${esc(edu.degree)}}{\${esc(edu.date)}}\\n\`;
   }
-  education += '  \\resumeSubHeadingListEnd\n';
+  education += '  \\resumeSubHeadingListEnd\\n';
 
   // Experience
-  let experience = '\\section{Experience}\n  \\resumeSubHeadingListStart\n';
+  let experience = '\\section{Experience}\\n  \\resumeSubHeadingListStart\\n';
   for (const exp of (data.experience || [])) {
-    experience += `\n    \\resumeSubheading\n      {${esc(exp.title)}}{${esc(exp.date)}}\n      {${esc(exp.company)}}{${esc(exp.location)}}\n      \\resumeItemListStart\n`;
+    experience += \`\\n    \\resumeSubheading\\n      {\${esc(exp.title)}}{\${esc(exp.date)}}\\n      {\${esc(exp.company)}}{\${esc(exp.location)}}\\n      \\resumeItemListStart\\n\`;
     for (const item of (exp.items || [])) {
-      experience += `        \\resumeItem{${esc(item)}}\n`;
+      experience += \`        \\resumeItem{\${esc(item)}}\\n\`;
     }
-    experience += `      \\resumeItemListEnd\n`;
+    experience += \`      \\resumeItemListEnd\\n\`;
   }
-  experience += '  \\resumeSubHeadingListEnd\n';
+  experience += '  \\resumeSubHeadingListEnd\\n';
 
   // Projects
-  let projects = '\\section{Projects}\n    \\resumeSubHeadingListStart\n';
+  let projects = '\\section{Projects}\\n    \\resumeSubHeadingListStart\\n';
   for (const proj of (data.projects || [])) {
-    projects += `      \\resumeProjectHeading\n          {\\textbf{${esc(proj.name)}} $|$ \\emph{${esc(proj.tech)}}}{${esc(proj.date)}}\n          \\resumeItemListStart\n`;
+    projects += \`      \\resumeProjectHeading\\n          {\\textbf{\${esc(proj.name)}} $|$ \\emph{\${esc(proj.tech)}}}{\${esc(proj.date)}}\\n          \\resumeItemListStart\\n\`;
     for (const item of (proj.items || [])) {
-      projects += `            \\resumeItem{${esc(item)}}\n`;
+      projects += \`            \\resumeItem{\${esc(item)}}\\n\`;
     }
-    projects += `          \\resumeItemListEnd\n`;
+    projects += \`          \\resumeItemListEnd\\n\`;
   }
-  projects += '    \\resumeSubHeadingListEnd\n';
+  projects += '    \\resumeSubHeadingListEnd\\n';
 
   // Skills
-  let skills = '\\section{Technical Skills}\n \\begin{itemize}[leftmargin=0.15in, label={}]\n    \\small{\\item{\n';
+  let skills = '\\section{Technical Skills}\\n \\begin{itemize}[leftmargin=0.15in, label={}]\\n    \\small{\\item{\\n';
   for (const skill of (data.skills || [])) {
-    skills += `     \\textbf{${esc(skill.category)}}{: ${esc(skill.items)}} \\\\\n`;
+    skills += \`     \\textbf{\${esc(skill.category)}}{: \${esc(skill.items)}} \\\\\\n\`;
   }
   // Remove trailing \\
-  skills = skills.replace(/\\\\\n$/, '\n');
-  skills += '    }}\n \\end{itemize}\n';
+  skills = skills.replace(/\\\\\\\\\\n$/, '\\n');
+  skills += '    }}\\n \\end{itemize}\\n';
 
-  return `%-------------------------
+  return \`%-------------------------
 % Resume in Latex
 % Author : Generated by CareerSync AI
 % Based off of: https://github.com/sb2nov/resume
@@ -198,18 +201,18 @@ function buildLatex(data: any): string {
 
 \\begin{document}
 
-${header}
+\${header}
 
-${education}
-${experience}
-${projects}
-${skills}
+\${education}
+\${experience}
+\${projects}
+\${skills}
 \\end{document}
-`;
+\`;
 }
 
 export const tailorResume = async (resumeText: string, jdText: string): Promise<any> => {
-  const prompt = `
+  const prompt = \`
 You are an expert AI Resume Writer. Extract and optimize the resume data to match the Job Description.
 
 Return a JSON object with this EXACT structure:
@@ -246,57 +249,48 @@ Rules:
 - If a field is missing from the resume, set it to an empty string or empty array.
 
 Resume:
-${resumeText.substring(0, 3000)}
+\${resumeText.substring(0, 3000)}
 
 Job Description:
-${jdText.substring(0, 3000)}
-  `;
+\${jdText.substring(0, 3000)}
+  \`;
 
   try {
-    if (!openai) throw new Error('OpenAI client not initialized');
-    const response = await openai.chat.completions.create({
-      model: "google/gemini-3-flash-preview:free",
-      messages: [
-        { role: "system", content: "You output only valid JSON. No markdown fences, no explanation." },
-        { role: "user", content: prompt }
-      ],
-      temperature: 0.3
-    });
-    const content = response.choices[0]?.message?.content || '{}';
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('No JSON found');
-
-    const structuredData = JSON.parse(jsonMatch[0]);
+    const model = getJsonModel(0.3);
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+    const structuredData = JSON.parse(text);
+    
     const latex = buildLatex(structuredData);
 
     // Build a markdown preview from the same data
-    let md = `# ${structuredData.name || 'Resume'}\n`;
+    let md = \`# \${structuredData.name || 'Resume'}\\n\`;
     if (structuredData.phone || structuredData.email || structuredData.location) {
-      md += `**${[structuredData.phone, structuredData.email, structuredData.location].filter(Boolean).join(' | ')}**\n\n`;
+      md += \`**\${[structuredData.phone, structuredData.email, structuredData.location].filter(Boolean).join(' | ')}**\\n\\n\`;
     }
-    md += `---\n\n## Education\n`;
+    md += \`---\\n\\n## Education\\n\`;
     for (const edu of (structuredData.education || [])) {
-      md += `**${edu.school}** — ${edu.degree} *(${edu.date})*\n\n`;
+      md += \`**\${edu.school}** — \${edu.degree} *(\${edu.date})*\\n\\n\`;
     }
-    md += `---\n\n## Experience\n`;
+    md += \`---\\n\\n## Experience\\n\`;
     for (const exp of (structuredData.experience || [])) {
-      md += `**${exp.title}** at ${exp.company} *(${exp.date})*\n`;
+      md += \`**\${exp.title}** at \${exp.company} *(\${exp.date})*\\n\`;
       for (const item of (exp.items || [])) {
-        md += `- ${item}\n`;
+        md += \`- \${item}\\n\`;
       }
-      md += '\n';
+      md += '\\n';
     }
-    md += `---\n\n## Projects\n`;
+    md += \`---\\n\\n## Projects\\n\`;
     for (const proj of (structuredData.projects || [])) {
-      md += `**${proj.name}** | *${proj.tech}* *(${proj.date})*\n`;
+      md += \`**\${proj.name}** | *\${proj.tech}* *(\${proj.date})*\\n\`;
       for (const item of (proj.items || [])) {
-        md += `- ${item}\n`;
+        md += \`- \${item}\\n\`;
       }
-      md += '\n';
+      md += '\\n';
     }
-    md += `---\n\n## Technical Skills\n`;
+    md += \`---\\n\\n## Technical Skills\\n\`;
     for (const skill of (structuredData.skills || [])) {
-      md += `**${skill.category}:** ${skill.items}\n\n`;
+      md += \`**\${skill.category}:** \${skill.items}\\n\\n\`;
     }
 
     return {
@@ -308,7 +302,7 @@ ${jdText.substring(0, 3000)}
     console.error('Tailoring Error:', error?.message || error);
     return {
       tailored_content_latex: '% Error generating LaTeX',
-      tailored_content_markdown: '# Error\n\nFailed to generate resume. Please try again.'
+      tailored_content_markdown: '# Error\\n\\nFailed to generate resume. Please try again.'
     };
   }
 };
@@ -318,40 +312,53 @@ export interface ChatMessage {
   content: string;
 }
 
+const mapHistoryToGemini = (history: ChatMessage[]) => {
+  return history.map(msg => ({
+    role: msg.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: msg.content }]
+  }));
+};
+
 export const conductMockInterview = async (resumeText: string, jdText: string, history: ChatMessage[]): Promise<any> => {
-  const systemPrompt = `You are an expert technical interviewer and hiring manager conducting a mock interview with a candidate.
+  const systemPrompt = \`You are an expert technical interviewer and hiring manager conducting a mock interview with a candidate.
 You will base your questions primarily on the Job Description and the candidate's Resume.
 
 Resume:
-${resumeText.substring(0, 3000)}
+\${resumeText.substring(0, 3000)}
 
 Job Description:
-${jdText.substring(0, 3000)}
+\${jdText.substring(0, 3000)}
 
 Instructions:
 1. If this is the start of the interview (no prior messages), ask a brief opening behavioral or technical question relevant to the JD and resume.
 2. If the candidate has answered a question, briefly evaluate their answer (provide 1-2 sentences of constructive feedback) and then ask the NEXT relevant question.
 3. Keep your responses concise, conversational, and professional. 
 4. Ask ONLY ONE question at a time.
-5. If the user indicates they are done or asks to finish, provide a brief summary of their performance.`;
+5. If the user indicates they are done or asks to finish, provide a brief summary of their performance.\`;
 
   try {
-    if (!openai) throw new Error('OpenAI client not initialized');
-    
-    // Prepare messages array for the LLM
-    const messages: any[] = [
-      { role: "system", content: systemPrompt },
-      ...history
-    ];
-
-    const response = await openai.chat.completions.create({
-      model: "google/gemini-3-flash-preview:free",
-      messages: messages,
-      temperature: 0.5,
-      max_tokens: 500
+    if (!genAI) throw new Error('GEMINI_API_KEY not configured in environment');
+    const geminiModel = genAI.getGenerativeModel({
+      model: MODEL_NAME,
+      systemInstruction: systemPrompt,
+      generationConfig: {
+        temperature: 0.5,
+        maxOutputTokens: 500,
+      }
     });
 
-    const reply = response.choices[0]?.message?.content || 'I am having trouble responding right now. Let us try again.';
+    // Extract the latest message to send explicitly
+    if (history.length === 0) return { reply: "Let's begin!" };
+    
+    const previousHistory = history.slice(0, -1);
+    const lastMessage = history[history.length - 1].content;
+
+    const chatSession = geminiModel.startChat({
+      history: mapHistoryToGemini(previousHistory)
+    });
+
+    const result = await chatSession.sendMessage(lastMessage);
+    const reply = result.response.text();
     return { reply };
   } catch (error: any) {
     console.error('Mock Interview Error:', error?.message || error);
@@ -360,7 +367,7 @@ Instructions:
 };
 
 export const checkAuthenticity = async (resumeText: string): Promise<any> => {
-  const prompt = `
+  const prompt = \`
     You are an expert technical recruiter and resume auditor. Your job is to analyze the following resume and flag any inconsistencies, unrealistic claims, or potential "fake" skills.
     Examples of red flags:
     - Claiming 10 years of experience with a framework that was released 4 years ago.
@@ -368,20 +375,14 @@ export const checkAuthenticity = async (resumeText: string): Promise<any> => {
     - Completing a 4-year degree in 1 year.
     - Listing a massive number of deep technical skills that no single person typically masters.
 
-    Structure: { "trust_score": 0-100, "red_flags": [{ "claim": "", "reason": "" }], "green_flags": [], "authenticity_summary": "" }
-    Resume: ${resumeText.substring(0, 4000)}
-  `;
+    Structure: { "trust_score": 0-100, "red_flags": [{ "claim": "string", "reason": "string" }], "green_flags": ["string"], "authenticity_summary": "string" }
+    Resume: \${resumeText.substring(0, 4000)}
+  \`;
   try {
-    if (!openai) throw new Error('OpenAI client not initialized');
-    const response = await openai.chat.completions.create({
-      model: "google/gemini-3-flash-preview:free",
-      messages: [{ role: "system", content: "You output only structured JSON." }, { role: "user", content: prompt }],
-      temperature: 0.1
-    });
-    const content = response.choices[0]?.message?.content || '{}';
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('Invalid JSON response');
-    return JSON.parse(jsonMatch[0]);
+    const model = getJsonModel(0.1);
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+    return JSON.parse(text);
   } catch (error: any) {
     console.error('Authenticity Check Error:', error?.message || error);
     throw new Error('Authenticity check failed: ' + (error?.message || 'Unknown error'));
@@ -389,29 +390,34 @@ export const checkAuthenticity = async (resumeText: string): Promise<any> => {
 };
 
 export const chatWithMentor = async (history: ChatMessage[]): Promise<any> => {
-  const systemPrompt = `You are an expert AI Career Mentor. You provide guidance on tech careers, learning roadmaps, resume building, and interview prep.
-Keep your responses concise, encouraging, and highly actionable. Format your answers using markdown if necessary, but keep them brief.`;
+  const systemPrompt = \`You are an expert AI Career Mentor. You provide guidance on tech careers, learning roadmaps, resume building, and interview prep.
+Keep your responses concise, encouraging, and highly actionable. Format your answers using markdown if necessary, but keep them brief.\`;
 
   try {
-    if (!openai) throw new Error('OpenAI client not initialized');
-    
-    const messages: any[] = [
-      { role: "system", content: systemPrompt },
-      ...history
-    ];
-
-    const response = await openai.chat.completions.create({
-      model: "google/gemini-3-flash-preview:free",
-      messages: messages,
-      temperature: 0.7,
-      max_tokens: 600
+    if (!genAI) throw new Error('GEMINI_API_KEY not configured in environment');
+    const geminiModel = genAI.getGenerativeModel({
+      model: MODEL_NAME,
+      systemInstruction: systemPrompt,
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 600,
+      }
     });
 
-    const reply = response.choices[0]?.message?.content || 'I am having trouble responding right now. Let us try again.';
+    if (history.length === 0) return { reply: "Hello!" };
+    
+    const previousHistory = history.slice(0, -1);
+    const lastMessage = history[history.length - 1].content;
+
+    const chatSession = geminiModel.startChat({
+      history: mapHistoryToGemini(previousHistory)
+    });
+
+    const result = await chatSession.sendMessage(lastMessage);
+    const reply = result.response.text();
     return { reply };
   } catch (error: any) {
     console.error('Mentor Chat Error:', error?.message || error);
     return { reply: "There was an error connecting to your AI Mentor. Please try again." };
   }
 };
-
