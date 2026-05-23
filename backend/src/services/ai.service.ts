@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const genAI = process.env.GEMINI_API_KEY ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
-const MODEL_NAME = "gemini-1.5-flash";
+const MODEL_NAME = "gemini-1.5-pro";
 
 const getJsonModel = (temperature = 0.2) => {
   if (!genAI) throw new Error('GEMINI_API_KEY not configured in environment');
@@ -357,7 +357,7 @@ Instructions:
   try {
     if (!genAI) throw new Error('GEMINI_API_KEY not configured in environment');
     const geminiModel = genAI!.getGenerativeModel({
-      model: "gemini-1.5-flash",
+      model: "gemini-1.5-pro",
       generationConfig: {
         temperature: 0.5,
         maxOutputTokens: 500,
