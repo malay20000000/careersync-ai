@@ -325,6 +325,9 @@ const DashboardPage = () => {
           <div>
             <p className="px-3 text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Account</p>
             <nav className="space-y-1">
+              <button onClick={() => navigate('/profile')} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-slate-600 hover:bg-slate-50 transition">
+                <User size={18} /> My Profile
+              </button>
               <button 
                 onClick={() => setActiveTab('history')}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold transition ${activeTab === 'history' ? 'bg-sky-50 text-sky-600' : 'text-slate-600 hover:bg-slate-50'}`}
