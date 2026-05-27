@@ -43,6 +43,10 @@ router.post('/resume', authMiddleware, upload.single('resume'), async (req: any,
       { new: true }
     ).select('-password');
 
+    if (!updatedUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
     res.json({
       message: 'Resume saved and profile updated',
       user: {
