@@ -34,23 +34,48 @@ const MockInterviewPage = () => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const res = await axios.get(`${API_URL}/api/auth/me`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        useAuthStore.getState().login(res.data, token!);
+      } catch (err) {
+        console.error('Failed to sync user data', err);
+      }
+    };
+    if (token) fetchUser();
+  }, [token]);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
+      const selectedFile = e.target.files[0];
+      setFile(selectedFile);
       setError('');
+      
+      const formData = new FormData();
+      formData.append('resume', selectedFile);
+      try {
+        await axios.post(`${API_URL}/api/profile/resume`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data', 'Authorization': `Bearer ${token}` }
+        });
+      } catch (err) {
+        console.error('Failed to update profile resume', err);
+      }
     }
   };
 
   const handleStartInterview = async () => {
-    if (!file || !jdText.trim()) {
-      setError('Please upload your resume and paste the Job Description.');
+    if ((!file && !user?.resumeFileName) || !jdText.trim()) {
+      setError('Please upload your resume or use your stored resume, and paste the Job Description.');
       return;
     }
     setLoading(true);
     setError('');
 
     const formData = new FormData();
-    formData.append('resume', file);
+    if (file) formData.append('resume', file);
     formData.append('jdText', jdText);
     formData.append('history', JSON.stringify([]));
 
@@ -78,7 +103,7 @@ const MockInterviewPage = () => {
 
     try {
       const formData = new FormData();
-      formData.append('resume', file!);
+      if (file) formData.append('resume', file);
       formData.append('jdText', jdText);
       formData.append('history', JSON.stringify(newMessages));
 
@@ -176,11 +201,14 @@ const MockInterviewPage = () => {
 
               <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm space-y-6">
                 <div>
-                  <label className="text-sm font-bold text-slate-700 mb-3 block">Upload Resume (PDF)</label>
+                  <label className="text-sm font-bold text-slate-700 mb-3 block flex justify-between">
+                    <span>Upload Resume (PDF)</span>
+                    {user?.resumeFileName && !file && <span className="text-indigo-600 font-medium">Using: {user.resumeFileName}</span>}
+                  </label>
                   <label className="border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center hover:border-sky-400 hover:bg-sky-50 transition cursor-pointer group block">
                     <input type="file" className="hidden" onChange={handleFileChange} accept=".pdf" />
-                    <UploadCloud className={`mx-auto mb-3 ${file ? 'text-sky-500' : 'text-slate-400'} group-hover:text-sky-500 transition`} size={32} />
-                    <p className="text-slate-600 font-bold text-sm">{file ? file.name : 'Click to select PDF Resume'}</p>
+                    <UploadCloud className={`mx-auto mb-3 ${(file || user?.resumeFileName) ? 'text-sky-500' : 'text-slate-400'} group-hover:text-sky-500 transition`} size={32} />
+                    <p className="text-slate-600 font-bold text-sm">{file ? file.name : (user?.resumeFileName ? 'Upload different resume' : 'Click to select PDF Resume')}</p>
                   </label>
                 </div>
 
@@ -202,7 +230,7 @@ const MockInterviewPage = () => {
 
                 <button
                   onClick={handleStartInterview}
-                  disabled={loading || !file || !jdText.trim()}
+                  disabled={loading || (!file && !user?.resumeFileName) || !jdText.trim()}
                   className="w-full bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-bold py-4 rounded-xl transition shadow-lg shadow-slate-900/10 flex items-center justify-center gap-2 text-lg"
                 >
                   {loading ? <Loader2 className="animate-spin" size={24} /> : <Sparkles size={24} />}

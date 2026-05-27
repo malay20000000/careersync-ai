@@ -8,6 +8,7 @@ import DashboardPage from './pages/DashboardPage';
 import MockInterviewPage from './pages/MockInterviewPage';
 import RecruiterDashboardPage from './pages/RecruiterDashboardPage';
 import RecruiterResultsPage from './pages/RecruiterResultsPage';
+import ProfilePage from './pages/ProfilePage';
 import ChatbotWidget from './components/ChatbotWidget';
 import { useAuthStore } from './store/authStore';
 
@@ -29,6 +30,14 @@ function App() {
           element={
             <ProtectedRoute>
               <DashboardPage />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/profile" 
+          element={
+            <ProtectedRoute>
+              <ProfilePage />
             </ProtectedRoute>
           } 
         />

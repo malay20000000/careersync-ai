@@ -441,10 +441,42 @@ Keep your responses concise, encouraging, and highly actionable. Format your ans
     });
 
     const result = await chatSession.sendMessage(lastMessage);
-    const reply = result.response.text();
+    const reply = result.response.text() || 'I am having trouble responding right now. Let us try again.';
     return { reply };
   } catch (error: any) {
     console.error('Mentor Chat Error:', error?.message || error);
     return { reply: "Error connecting to AI: " + (error?.message || "Unknown error") };
+  }
+};
+
+export const generateProfileSummary = async (resumeText: string): Promise<any> => {
+  const prompt = `
+    Analyze the following resume and create a personalized, dynamic profile summary for the user.
+    Return a JSON object with this EXACT structure:
+    {
+      "bio": "A professional 3-4 sentence biography of the user based on their experience and skills.",
+      "top_skills": ["Skill 1", "Skill 2", "Skill 3", "Skill 4", "Skill 5"],
+      "career_trajectory": "A short 1-2 sentence description of where their career seems to be heading (e.g. 'Progressing towards Senior Frontend Developer').",
+      "experience_level": "e.g. Entry-level, Mid-level, Senior, Executive"
+    }
+
+    Resume:
+    ${resumeText.substring(0, 4000)}
+  `;
+  try {
+    const geminiModel = getJsonModel(0.4);
+    const result = await geminiModel.generateContent(prompt);
+    const content = result.response.text() || '{}';
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('Invalid JSON response');
+    return JSON.parse(jsonMatch[0]);
+  } catch (error: any) {
+    console.error('Profile Summary Error:', error?.message || error);
+    return {
+      bio: "An aspiring professional ready for their next career move.",
+      top_skills: [],
+      career_trajectory: "Exploring new opportunities.",
+      experience_level: "Unknown"
+    };
   }
 };

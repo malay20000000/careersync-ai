@@ -26,13 +26,17 @@ const authMiddleware = (req: any, res: any, next: any) => {
 router.post('/analyze', authMiddleware, upload.single('resume'), async (req: any, res: any): Promise<any> => {
   console.log('Analyze Career request received');
   try {
-    if (!req.file) {
-      console.log('No file in request');
-      return res.status(400).json({ message: 'No file uploaded' });
+    let resumeText = '';
+    if (req.file) {
+      const pdfData = await (pdf.default || pdf)(req.file.buffer);
+      resumeText = pdfData.text;
+    } else {
+      const user = await User.findById(req.user.id);
+      if (!user || !user.resumeText) {
+        return res.status(400).json({ message: 'No file uploaded and no stored resume found.' });
+      }
+      resumeText = user.resumeText;
     }
-
-    const pdfData = await (pdf.default || pdf)(req.file.buffer);
-    const resumeText = pdfData.text;
 
     const analysis = await analyzeResume(resumeText);
     res.json(analysis);
@@ -46,12 +50,17 @@ router.post('/analyze', authMiddleware, upload.single('resume'), async (req: any
 router.post('/authenticity', authMiddleware, upload.single('resume'), async (req: any, res: any): Promise<any> => {
   console.log('Authenticity check request received');
   try {
-    if (!req.file) {
-      return res.status(400).json({ message: 'No file uploaded' });
+    let resumeText = '';
+    if (req.file) {
+      const pdfData = await (pdf.default || pdf)(req.file.buffer);
+      resumeText = pdfData.text;
+    } else {
+      const user = await User.findById(req.user.id);
+      if (!user || !user.resumeText) {
+        return res.status(400).json({ message: 'No file uploaded and no stored resume found.' });
+      }
+      resumeText = user.resumeText;
     }
-
-    const pdfData = await (pdf.default || pdf)(req.file.buffer);
-    const resumeText = pdfData.text;
 
     const analysis = await checkAuthenticity(resumeText);
     res.json(analysis);
@@ -69,14 +78,21 @@ router.post('/analyze-jd', authMiddleware, upload.single('resume'), async (req: 
     const { jdText } = req.body;
     console.log('JD Text length:', jdText?.length || 0);
     
-    if (!req.file || !jdText) {
-      console.log('Missing data:', { hasFile: !!req.file, hasJD: !!jdText });
-      return res.status(400).json({ message: 'Missing resume file or Job Description text' });
+    if (!jdText) {
+      return res.status(400).json({ message: 'Missing Job Description text' });
     }
 
-
-    const pdfData = await (pdf.default || pdf)(req.file.buffer);
-    const resumeText = pdfData.text;
+    let resumeText = '';
+    if (req.file) {
+      const pdfData = await (pdf.default || pdf)(req.file.buffer);
+      resumeText = pdfData.text;
+    } else {
+      const user = await User.findById(req.user.id);
+      if (!user || !user.resumeText) {
+        return res.status(400).json({ message: 'No file uploaded and no stored resume found.' });
+      }
+      resumeText = user.resumeText;
+    }
 
     const analysis = await compareResumeWithJD(resumeText, jdText);
     res.json(analysis);
@@ -90,12 +106,21 @@ router.post('/analyze-jd', authMiddleware, upload.single('resume'), async (req: 
 router.post('/tailor', authMiddleware, upload.single('resume'), async (req: any, res: any): Promise<any> => {
   try {
     const { jdText } = req.body;
-    if (!req.file || !jdText) {
-      return res.status(400).json({ message: 'Missing resume file or Job Description text' });
+    if (!jdText) {
+      return res.status(400).json({ message: 'Missing Job Description text' });
     }
 
-    const pdfData = await (pdf.default || pdf)(req.file.buffer);
-    const resumeText = pdfData.text;
+    let resumeText = '';
+    if (req.file) {
+      const pdfData = await (pdf.default || pdf)(req.file.buffer);
+      resumeText = pdfData.text;
+    } else {
+      const user = await User.findById(req.user.id);
+      if (!user || !user.resumeText) {
+        return res.status(400).json({ message: 'No file uploaded and no stored resume found.' });
+      }
+      resumeText = user.resumeText;
+    }
 
     const result = await tailorResume(resumeText, jdText);
     res.json(result);
@@ -165,6 +190,11 @@ router.post('/mock-interview', authMiddleware, upload.single('resume'), async (r
       resumeText = pdfData.text;
     } else if (req.body.resumeText) {
       resumeText = req.body.resumeText;
+    } else {
+      const user = await User.findById(req.user.id);
+      if (user && user.resumeText) {
+        resumeText = user.resumeText;
+      }
     }
 
     if (!resumeText || !jdText) {

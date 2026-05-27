@@ -51,6 +51,21 @@ const DashboardPage = () => {
   const [recruiterHistoryView, setRecruiterHistoryView] = useState<any>(null);
 
   useEffect(() => {
+    // Fetch latest user data on mount to ensure we have the latest resumeFileName
+    const fetchUser = async () => {
+      try {
+        const res = await axios.get(`${API_URL}/api/auth/me`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        useAuthStore.getState().login(res.data, token!);
+      } catch (err) {
+        console.error('Failed to sync user data', err);
+      }
+    };
+    if (token) fetchUser();
+  }, [token]);
+
+  useEffect(() => {
     if (activeTab === 'history') {
       fetchHistory();
     }
@@ -75,20 +90,36 @@ const DashboardPage = () => {
     navigate('/');
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
+      const selectedFile = e.target.files[0];
+      setFile(selectedFile);
       setError('');
+      
+      // Upload immediately to profile
+      const formData = new FormData();
+      formData.append('resume', selectedFile);
+      try {
+        await axios.post(`${API_URL}/api/profile/resume`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data', 'Authorization': `Bearer ${token}` }
+        });
+        // Optionally update the local user store if we want to reflect it immediately
+      } catch (err) {
+        console.error('Failed to update profile resume', err);
+      }
     }
   };
 
   const handleAnalyzeCareer = async () => {
-    if (!file) return;
+    if (!file && !user?.resumeFileName) {
+      setError('Please upload a resume or use your stored resume.');
+      return;
+    }
     setLoading(true);
     setError('');
     setTailoredResume(null);
     const formData = new FormData();
-    formData.append('resume', file);
+    if (file) formData.append('resume', file);
     try {
       const res = await axios.post(`${API_URL}/api/resume/analyze`, formData, {
         headers: { 'Content-Type': 'multipart/form-data', 'Authorization': `Bearer ${token}` }
@@ -113,7 +144,7 @@ const DashboardPage = () => {
   };
 
   const handleAnalyzeJD = async () => {
-    if (!file || !jdText) {
+    if ((!file && !user?.resumeFileName) || !jdText) {
       setError('Please provide both a resume and a Job Description.');
       return;
     }
@@ -122,7 +153,7 @@ const DashboardPage = () => {
     setTailoredResume(null);
     const formData = new FormData();
     formData.append('jdText', jdText);
-    formData.append('resume', file);
+    if (file) formData.append('resume', file);
     try {
       const res = await axios.post(`${API_URL}/api/resume/analyze-jd`, formData, {
         headers: { 'Content-Type': 'multipart/form-data', 'Authorization': `Bearer ${token}` }
@@ -147,11 +178,11 @@ const DashboardPage = () => {
   };
 
   const handleAuthenticityCheck = async () => {
-    if (!file) return;
+    if (!file && !user?.resumeFileName) return;
     setLoading(true);
     setError('');
     const formData = new FormData();
-    formData.append('resume', file);
+    if (file) formData.append('resume', file);
     
     try {
       const res = await axios.post(`${API_URL}/api/resume/authenticity`, formData, {
@@ -180,12 +211,12 @@ const DashboardPage = () => {
   };
 
   const handleTailorResume = async () => {
-    if (!file || !jdText) return;
+    if ((!file && !user?.resumeFileName) || !jdText) return;
     setTailoring(true);
     setError('');
     const formData = new FormData();
     formData.append('jdText', jdText);
-    formData.append('resume', file);
+    if (file) formData.append('resume', file);
     try {
       const res = await axios.post(`${API_URL}/api/resume/tailor`, formData, {
         headers: { 'Content-Type': 'multipart/form-data', 'Authorization': `Bearer ${token}` }
@@ -332,18 +363,18 @@ const DashboardPage = () => {
               <div className="flex items-center gap-4">
                 <label className="bg-white border border-slate-200 shadow-sm rounded-xl p-3 flex items-center gap-3 hover:border-sky-300 hover:shadow-md transition cursor-pointer group">
                   <input type="file" className="hidden" onChange={handleFileChange} accept=".pdf" />
-                  <div className={`p-2 rounded-lg ${file ? 'bg-sky-100' : 'bg-slate-100'} group-hover:bg-sky-100 transition`}>
-                    <UploadCloud className={`${file ? 'text-sky-600' : 'text-slate-500'} group-hover:text-sky-600 transition`} size={20} />
+                  <div className={`p-2 rounded-lg ${(file || user?.resumeFileName) ? 'bg-sky-100' : 'bg-slate-100'} group-hover:bg-sky-100 transition`}>
+                    <UploadCloud className={`${(file || user?.resumeFileName) ? 'text-sky-600' : 'text-slate-500'} group-hover:text-sky-600 transition`} size={20} />
                   </div>
                   <div>
                     <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-0.5">Resume</p>
-                    <p className="text-sm font-bold text-slate-800 max-w-[150px] truncate">{file ? file.name : 'Select PDF File'}</p>
+                    <p className="text-sm font-bold text-slate-800 max-w-[150px] truncate">{file ? file.name : (user?.resumeFileName || 'Select PDF File')}</p>
                   </div>
                 </label>
                 
                 <button 
                   onClick={activeTab === 'career' ? handleAnalyzeCareer : activeTab === 'authenticity' ? handleAuthenticityCheck : handleAnalyzeJD}
-                  disabled={loading || !file}
+                  disabled={loading || (!file && !user?.resumeFileName)}
                   className="bg-sky-600 hover:bg-sky-500 disabled:bg-slate-300 text-white font-bold py-4 px-8 rounded-xl transition shadow-lg shadow-sky-500/20 flex items-center gap-2"
                 >
                   {loading ? <Loader2 className="animate-spin" size={20} /> : <Target size={20} />}
