@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuthStore } from '../store/authStore';
-import { LogOut, UploadCloud, CheckCircle2, AlertCircle, Calendar, Target, Loader2, Briefcase, ChevronRight, Wand2, Download, Copy, Check, FileCode, Mic, Users } from 'lucide-react';
+import { LogOut, UploadCloud, CheckCircle2, AlertCircle, Calendar, Target, Loader2, Briefcase, ChevronRight, Wand2, Download, Copy, Check, FileCode, Mic, Users, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
