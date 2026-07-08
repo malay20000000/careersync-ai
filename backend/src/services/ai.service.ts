@@ -1,30 +1,98 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import dotenv from 'dotenv';
+import { GoogleGenAI } from '@google/genai';
 
-dotenv.config();
+let genAI: GoogleGenAI | null = null;
+let activeModel = "gemini-1.5-flash"; // default fallback
 
-const genAI = process.env.GEMINI_API_KEY ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
-const MODEL_NAME = "gemini-3-flash-preview";
+let availableModelNames: string[] = [];
 
-const getJsonModel = (temperature = 0.2) => {
-  if (!genAI) throw new Error('GEMINI_API_KEY not configured in environment');
-  return genAI.getGenerativeModel({
-    model: MODEL_NAME,
-    generationConfig: {
-      responseMimeType: "application/json",
-      temperature
+export const initializeAI = async () => {
+  console.log("=== AI SERVICE STARTUP VALIDATION ===");
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    console.error("❌ GEMINI_API_KEY is not set in environment.");
+    return;
+  }
+  
+  console.log("✅ GEMINI_API_KEY is present.");
+  
+  try {
+    genAI = new GoogleGenAI({ apiKey });
+    const modelsResponse = await genAI.models.list();
+    const modelsList: any[] = [];
+    for await (const m of modelsResponse) {
+      modelsList.push(m);
     }
-  });
+    availableModelNames = modelsList.map((m: any) => m.name);
+    
+    console.log(`✅ Fetched ${availableModelNames.length} available models.`);
+    
+    const configuredModel = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
+    const targetModelName = 'models/' + configuredModel;
+    
+    const targetModelObj = modelsList.find((m: any) => m.name === targetModelName || m.name === configuredModel);
+    
+    if (targetModelObj && targetModelObj.supportedActions?.includes('generateContent')) {
+      activeModel = configuredModel;
+      console.log(`✅ Configured model '${configuredModel}' is fully supported.`);
+    } else {
+      console.warn(`⚠️ Configured model '${configuredModel}' is unavailable or unsupported.`);
+      
+      // Fallback logic
+      const preferredFallbacks = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+      let fallbackFound = false;
+      for (const fallback of preferredFallbacks) {
+        const fallbackObj = modelsList.find((m: any) => m.name === 'models/' + fallback);
+        if (fallbackObj && fallbackObj.supportedActions?.includes('generateContent')) {
+          activeModel = fallback;
+          fallbackFound = true;
+          break;
+        }
+      }
+      
+      if (!fallbackFound) {
+        const anyFlash = modelsList.find((m: any) => m.name.includes('flash') && m.supportedActions?.includes('generateContent'));
+        if (anyFlash) {
+          activeModel = anyFlash.name.replace('models/', '');
+        }
+      }
+      
+      console.log(`🔄 Automatically fell back to supported model: '${activeModel}'`);
+    }
+  } catch (error: any) {
+    console.error("❌ AI Initialization Failed:", error.message);
+  }
+  
+  console.log("=======================================");
 };
 
-const getTextModel = (temperature = 0.5) => {
-  if (!genAI) throw new Error('GEMINI_API_KEY not configured in environment');
-  return genAI.getGenerativeModel({
-    model: MODEL_NAME,
-    generationConfig: {
-      temperature
+const checkGenAI = () => {
+  if (!genAI) {
+    throw new Error(`AI Service is not initialized properly. API Key missing or invalid. Check startup logs.`);
+  }
+}
+
+const generateWithFallback = async (options: any): Promise<any> => {
+  const fallbacks = [activeModel, 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+  let lastError: any;
+
+  for (const model of fallbacks) {
+    try {
+      if (!availableModelNames.includes('models/' + model) && model !== activeModel) continue;
+      
+      return await genAI!.models.generateContent({
+        ...options,
+        model: model
+      });
+    } catch (error: any) {
+      lastError = error;
+      console.warn(`⚠️ Model '${model}' failed: ${error?.message}. Retrying with next fallback...`);
     }
-  });
+  }
+
+  const configuredModel = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
+  throw new Error(
+    `[Exact Reason: ${lastError?.message}] | [Configured: ${configuredModel}] | [Available Models: ${availableModelNames.join(', ')}]`
+  );
 };
 
 export const analyzeResume = async (resumeText: string): Promise<any> => {
@@ -34,13 +102,15 @@ export const analyzeResume = async (resumeText: string): Promise<any> => {
     Resume Text: ${resumeText.substring(0, 4000)}
   `;
   try {
-    const model = getJsonModel(0.2);
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-    return JSON.parse(text);
+    checkGenAI();
+    const result = await generateWithFallback({
+        contents: prompt,
+        config: { temperature: 0.2, responseMimeType: 'application/json' }
+    });
+    return JSON.parse(result.text || '{}');
   } catch (error: any) {
     console.error('AI Analysis Error:', error?.message || error);
-    throw new Error('AI Analysis failed: ' + (error?.message || 'Unknown error'));
+    throw new Error('AI Analysis failed. Details: ' + (error?.message || 'Unknown error'));
   }
 };
 
@@ -52,13 +122,16 @@ export const compareResumeWithJD = async (resumeText: string, jdText: string): P
     JD: ${jdText.substring(0, 3000)}
   `;
   try {
-    const model = getJsonModel(0.2);
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-    return JSON.parse(text);
+    checkGenAI();
+    const result = await genAI!.models.generateContent({
+        model: activeModel,
+        contents: prompt,
+        config: { temperature: 0.2, responseMimeType: 'application/json' }
+    });
+    return JSON.parse(result.text || '{}');
   } catch (error: any) {
     console.error('JD Analysis Error:', error?.message || error);
-    throw new Error('JD Analysis failed: ' + (error?.message || 'Unknown error'));
+    throw new Error('JD Analysis failed: ' + (error?.message || 'Unknown error') + ` (Model: ${activeModel})`);
   }
 };
 
@@ -256,9 +329,14 @@ ${jdText.substring(0, 3000)}
   `;
 
   try {
-    const model = getJsonModel(0.3);
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
+    checkGenAI();
+    const result = await genAI!.models.generateContent({
+        model: activeModel,
+        contents: prompt,
+        config: { temperature: 0.3, responseMimeType: 'application/json' }
+    });
+    
+    const text = result.text || '{}';
     const structuredData = JSON.parse(text);
     
     const latex = buildLatex(structuredData);
@@ -355,14 +433,7 @@ Instructions:
 5. If the user indicates they are done or asks to finish, provide a brief summary of their performance.`;
 
   try {
-    if (!genAI) throw new Error('GEMINI_API_KEY not configured in environment');
-    const geminiModel = genAI!.getGenerativeModel({
-      model: "gemini-3-flash-preview",
-      generationConfig: {
-        temperature: 0.5,
-        maxOutputTokens: 500,
-      }
-    });
+    checkGenAI();
 
     if (history.length === 0) return { reply: "Let's begin!" };
     
@@ -375,12 +446,17 @@ Instructions:
       ...previousHistory
     ];
 
-    const chatSession = geminiModel.startChat({
-      history: mapHistoryToGemini(modifiedHistory)
+    const chatSession = genAI!.chats.create({
+      model: activeModel,
+      history: mapHistoryToGemini(modifiedHistory),
+      config: {
+        temperature: 0.5,
+        maxOutputTokens: 500,
+      }
     });
 
-    const result = await chatSession.sendMessage(lastMessage);
-    const reply = result.response.text();
+    const result = await chatSession.sendMessage({ message: lastMessage });
+    const reply = result.text;
     return { reply };
   } catch (error: any) {
     console.error('Mock Interview Error:', error?.message || error);
@@ -401,13 +477,16 @@ export const checkAuthenticity = async (resumeText: string): Promise<any> => {
     Resume: ${resumeText.substring(0, 4000)}
   `;
   try {
-    const model = getJsonModel(0.1);
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-    return JSON.parse(text);
+    checkGenAI();
+    const result = await genAI!.models.generateContent({
+        model: activeModel,
+        contents: prompt,
+        config: { temperature: 0.1, responseMimeType: 'application/json' }
+    });
+    return JSON.parse(result.text || '{}');
   } catch (error: any) {
     console.error('Authenticity Check Error:', error?.message || error);
-    throw new Error('Authenticity check failed: ' + (error?.message || 'Unknown error'));
+    throw new Error('Authenticity check failed: ' + (error?.message || 'Unknown error') + ` (Model: ${activeModel})`);
   }
 };
 
@@ -416,14 +495,7 @@ export const chatWithMentor = async (history: ChatMessage[]): Promise<any> => {
 Keep your responses concise, encouraging, and highly actionable. Format your answers using markdown if necessary, but keep them brief.`;
 
   try {
-    if (!genAI) throw new Error('GEMINI_API_KEY not configured in environment');
-    const geminiModel = genAI!.getGenerativeModel({
-      model: MODEL_NAME,
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 600,
-      }
-    });
+    checkGenAI();
 
     if (history.length === 0) return { reply: "Hello!" };
     
@@ -436,12 +508,17 @@ Keep your responses concise, encouraging, and highly actionable. Format your ans
       ...previousHistory
     ];
 
-    const chatSession = geminiModel.startChat({
-      history: mapHistoryToGemini(modifiedHistory)
+    const chatSession = genAI!.chats.create({
+      model: activeModel,
+      history: mapHistoryToGemini(modifiedHistory),
+      config: {
+        temperature: 0.7,
+        maxOutputTokens: 600,
+      }
     });
 
-    const result = await chatSession.sendMessage(lastMessage);
-    const reply = result.response.text() || 'I am having trouble responding right now. Let us try again.';
+    const result = await chatSession.sendMessage({ message: lastMessage });
+    const reply = result.text || 'I am having trouble responding right now. Let us try again.';
     return { reply };
   } catch (error: any) {
     console.error('Mentor Chat Error:', error?.message || error);
@@ -464,9 +541,14 @@ export const generateProfileSummary = async (resumeText: string): Promise<any> =
     ${resumeText.substring(0, 4000)}
   `;
   try {
-    const geminiModel = getJsonModel(0.4);
-    const result = await geminiModel.generateContent(prompt);
-    const content = result.response.text() || '{}';
+    checkGenAI();
+    const result = await genAI!.models.generateContent({
+        model: activeModel,
+        contents: prompt,
+        config: { temperature: 0.4, responseMimeType: 'application/json' }
+    });
+    
+    const content = result.text || '{}';
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('Invalid JSON response');
     return JSON.parse(jsonMatch[0]);
