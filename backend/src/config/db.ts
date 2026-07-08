@@ -40,7 +40,7 @@ function setupMongooseMock() {
     }
 
     modelClass.find = function(filter: any) {
-      let results = [...memoryDb[name]];
+      let results = [...(memoryDb[name] || [])];
       if (filter && typeof filter === 'object') {
         results = results.filter((item: any) => {
           for (const key in filter) {
@@ -63,7 +63,7 @@ function setupMongooseMock() {
     };
 
     modelClass.findOne = function(filter: any) {
-      let results = [...memoryDb[name]];
+      let results = [...(memoryDb[name] || [])];
       if (filter && typeof filter === 'object') {
         results = results.filter((item: any) => {
           for (const key in filter) {
@@ -94,7 +94,7 @@ function setupMongooseMock() {
         };
         return q;
       }
-      const results = memoryDb[name];
+      const results = memoryDb[name] || [];
       const found = results.find((item: any) => item._id.toString() === id.toString()) || null;
       const doc = found ? new modelClass(found) : null;
       if (doc) {
@@ -109,7 +109,7 @@ function setupMongooseMock() {
     };
 
     modelClass.findByIdAndUpdate = function(id: any, update: any, options: any) {
-      const results = memoryDb[name];
+      const results = memoryDb[name] || [];
       const foundIndex = results.findIndex((item: any) => item._id.toString() === id.toString());
       if (foundIndex >= 0) {
         // If updating with mongoose operators (like $set), handle it simplified
@@ -134,7 +134,7 @@ function setupMongooseMock() {
     };
 
     modelClass.findByIdAndDelete = function(id: any) {
-      const results = memoryDb[name];
+      const results = memoryDb[name] || [];
       const foundIndex = results.findIndex((item: any) => item._id.toString() === id.toString());
       let deleted = null;
       if (foundIndex >= 0) {
