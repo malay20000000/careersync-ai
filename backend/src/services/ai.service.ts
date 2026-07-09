@@ -71,7 +71,35 @@ const checkGenAI = () => {
   }
 }
 
-const generateWithFallback = async (options: any): Promise<any> => {
+// Helper to safely parse JSON from AI response
+const parseAIResponse = (text: string): any => {
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    console.warn('Initial JSON parse failed, attempting to clean up response...');
+    let cleanedText = text.replace(/```(?:json)?\s*/gi, '').replace(/```\s*/g, '').trim();
+    try {
+      return JSON.parse(cleanedText);
+    } catch (e) {
+      const match = cleanedText.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+      if (match) {
+        try {
+          // Attempt to fix trailing commas before parsing
+          let fixedJson = match[0].replace(/,\s*([}\]])/g, '$1');
+          // Also try to fix unescaped newlines in strings
+          fixedJson = fixedJson.replace(/(?<!\\)\n(?=[^"]*"\s*:)/g, '\\n');
+          return JSON.parse(fixedJson);
+        } catch (innerError) {
+          throw new Error('Malformed JSON response from model');
+        }
+      }
+      throw error;
+    }
+  }
+};
+
+const generateAndParseJSON = async (options: any): Promise<any> => {
   const fallbacks = [activeModel, 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
   let lastError: any;
 
@@ -79,10 +107,12 @@ const generateWithFallback = async (options: any): Promise<any> => {
     try {
       if (!availableModelNames.includes('models/' + model) && model !== activeModel) continue;
       
-      return await genAI!.models.generateContent({
+      const result = await genAI!.models.generateContent({
         ...options,
         model: model
       });
+      
+      return parseAIResponse(result.text || '{}');
     } catch (error: any) {
       lastError = error;
       console.warn(`⚠️ Model '${model}' failed: ${error?.message}. Retrying with next fallback...`);
@@ -103,11 +133,10 @@ export const analyzeResume = async (resumeText: string): Promise<any> => {
   `;
   try {
     checkGenAI();
-    const result = await generateWithFallback({
+    return await generateAndParseJSON({
         contents: prompt,
         config: { temperature: 0.2, responseMimeType: 'application/json' }
     });
-    return JSON.parse(result.text || '{}');
   } catch (error: any) {
     console.error('AI Analysis Error:', error?.message || error);
     throw new Error('AI Analysis failed. Details: ' + (error?.message || 'Unknown error'));
@@ -123,12 +152,10 @@ export const compareResumeWithJD = async (resumeText: string, jdText: string): P
   `;
   try {
     checkGenAI();
-    const result = await genAI!.models.generateContent({
-        model: activeModel,
+    return await generateAndParseJSON({
         contents: prompt,
         config: { temperature: 0.2, responseMimeType: 'application/json' }
     });
-    return JSON.parse(result.text || '{}');
   } catch (error: any) {
     console.error('JD Analysis Error:', error?.message || error);
     throw new Error('JD Analysis failed: ' + (error?.message || 'Unknown error') + ` (Model: ${activeModel})`);
@@ -330,14 +357,10 @@ ${jdText.substring(0, 3000)}
 
   try {
     checkGenAI();
-    const result = await genAI!.models.generateContent({
-        model: activeModel,
+    const structuredData = await generateAndParseJSON({
         contents: prompt,
         config: { temperature: 0.3, responseMimeType: 'application/json' }
     });
-    
-    const text = result.text || '{}';
-    const structuredData = JSON.parse(text);
     
     const latex = buildLatex(structuredData);
 
@@ -478,12 +501,10 @@ export const checkAuthenticity = async (resumeText: string): Promise<any> => {
   `;
   try {
     checkGenAI();
-    const result = await genAI!.models.generateContent({
-        model: activeModel,
+    return await generateAndParseJSON({
         contents: prompt,
         config: { temperature: 0.1, responseMimeType: 'application/json' }
     });
-    return JSON.parse(result.text || '{}');
   } catch (error: any) {
     console.error('Authenticity Check Error:', error?.message || error);
     throw new Error('Authenticity check failed: ' + (error?.message || 'Unknown error') + ` (Model: ${activeModel})`);
@@ -542,16 +563,10 @@ export const generateProfileSummary = async (resumeText: string): Promise<any> =
   `;
   try {
     checkGenAI();
-    const result = await genAI!.models.generateContent({
-        model: activeModel,
+    return await generateAndParseJSON({
         contents: prompt,
         config: { temperature: 0.4, responseMimeType: 'application/json' }
     });
-    
-    const content = result.text || '{}';
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('Invalid JSON response');
-    return JSON.parse(jsonMatch[0]);
   } catch (error: any) {
     console.error('Profile Summary Error:', error?.message || error);
     return {
